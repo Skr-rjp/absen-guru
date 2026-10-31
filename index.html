@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Absensi Datang & Pulang Guru</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS / xlsx for Excel Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .custom-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <header class="bg-emerald-700 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/10 p-2.5 rounded-xl backdrop-blur-md">
+                    <i class="fa-solid fa-chalkboard-user text-2xl text-emerald-200"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">Presensi Mandiri Guru</h1>
+                    <p class="text-xs text-emerald-200">Pencatatan Jam Datang & Pulang Harian</p>
+                </div>
+            </div>
+            <!-- Clock Widget -->
+            <div class="bg-emerald-800/60 backdrop-blur-sm px-4 py-2 rounded-xl text-center border border-emerald-500/30">
+                <div id="live-clock" class="text-xl font-mono font-bold tracking-wider">00:00:00</div>
+                <div id="live-date" class="text-xs text-emerald-200">Senin, 1 Januari 2026</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Column: Profile Guru & Action Buttons -->
+        <div class="lg:col-span-4 space-y-6">
+            
+            <!-- Card 1: Profil Guru (Input / Edit Nama) -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200/80 custom-shadow">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-id-card text-emerald-600"></i>
+                        Identitas Guru
+                    </h2>
+                    <button id="btn-edit-profile" onclick="toggleEditProfile()" class="text-xs text-emerald-700 hover:text-emerald-900 font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-pen-to-square"></i> <span id="edit-btn-text">Ubah</span>
+                    </button>
+                </div>
+
+                <!-- Display Mode -->
+                <div id="profile-display" class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xl shadow-inner" id="profile-avatar">
+                            G
+                        </div>
+                        <div>
+                            <h3 id="display-guru-name" class="font-bold text-slate-800 text-base leading-snug">Nama Guru Belum Diisi</h3>
+                            <p id="display-guru-info" class="text-xs text-slate-500">NIP / Mata Pelajaran</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Edit Mode -->
+                <form id="profile-form" onsubmit="handleSaveProfile(event)" class="space-y-3 mt-3 hidden">
+                    <div>
+                        <label for="guru-name" class="block text-xs font-semibold text-slate-600 mb-1">Nama Lengkap & Gelar</label>
+                        <input type="text" id="guru-name" placeholder="Cth: Dr. Budi Santoso, M.Pd" required
+                            class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition outline-none text-xs">
+                    </div>
+                    <div>
+                        <label for="guru-info" class="block text-xs font-semibold text-slate-600 mb-1">NIP / Mapel / Jabatan</label>
+                        <input type="text" id="guru-info" placeholder="Cth: NIP. 19850101... / Guru Matematika"
+                            class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition outline-none text-xs">
+                    </div>
+                    <button type="submit" 
+                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-xl shadow-sm text-xs transition">
+                        Simpan Identitas
+                    </button>
+                </form>
+            </div>
+
+            <!-- Card 2: Tombol Absen Datang & Pulang Cepat -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200/80 custom-shadow">
+                <h2 class="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-clock-check text-emerald-600"></i>
+                    Absensi Hari Ini
+                </h2>
+                <p class="text-xs text-slate-500 mb-4" id="current-today-date">-</p>
+
+                <!-- Status Card Hari Ini -->
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-center">
+                        <span class="text-[11px] font-medium text-slate-500 block mb-0.5">Jam Datang</span>
+                        <span id="today-time-in" class="text-base font-bold text-emerald-700">--:--</span>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-center">
+                        <span class="text-[11px] font-medium text-slate-500 block mb-0.5">Jam Pulang</span>
+                        <span id="today-time-out" class="text-base font-bold text-rose-700">--:--</span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="space-y-3">
+                    <button id="btn-absen-datang" onclick="markAttendance('Datang')"
+                        class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-emerald-200 transition duration-200 flex items-center justify-center gap-3">
+                        <i class="fa-solid fa-right-to-bracket text-xl"></i>
+                        <span>ABSEN DATANG</span>
+                    </button>
+
+                    <button id="btn-absen-pulang" onclick="markAttendance('Pulang')"
+                        class="w-full bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-rose-200 transition duration-200 flex items-center justify-center gap-3">
+                        <i class="fa-solid fa-right-from-bracket text-xl"></i>
+                        <span>ABSEN PULANG</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card 3: Ringkasan Bulan Ini -->
+            <div class="bg-emerald-900 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 opacity-10 text-8xl font-bold">
+                    <i class="fa-solid fa-calendar-days"></i>
+                </div>
+                <h3 class="text-xs font-semibold text-emerald-200 uppercase tracking-wider mb-3">Statistik Presensi Anda</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div id="stat-total-hadir" class="text-2xl font-extrabold text-white">0</div>
+                        <div class="text-xs text-emerald-200">Total Hari Hadir</div>
+                    </div>
+                    <div>
+                        <div id="stat-lengkap-hadir" class="text-2xl font-extrabold text-white">0</div>
+                        <div class="text-xs text-emerald-200">Absen Datang & Pulang</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Rekapitulasi Data Absen & Export Excel -->
+        <div class="lg:col-span-8 space-y-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-200/80 custom-shadow flex flex-col h-full">
+                
+                <!-- Header & Controls -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-file-invoice text-emerald-600"></i>
+                            Rekapitulasi Kehadiran Guru
+                        </h2>
+                        <p class="text-xs text-slate-500">Riwayat catatan waktu datang dan pulang</p>
+                    </div>
+
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <!-- Export Button -->
+                        <button onclick="exportToExcel()" 
+                            class="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-md shadow-emerald-100">
+                            <i class="fa-solid fa-file-excel text-base"></i>
+                            <span>Unduh Rekap Excel</span>
+                        </button>
+                        <!-- Reset Data Button -->
+                        <button onclick="confirmClearData()" title="Hapus Riwayat Absensi" 
+                            class="bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 p-2.5 rounded-xl text-xs transition border border-slate-200">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filter Controls -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Filter Bulan & Tahun</label>
+                        <input type="month" id="filter-month" onchange="renderTable()" 
+                            class="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Status Kehadiran</label>
+                        <select id="filter-status" onchange="renderTable()" 
+                            class="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-emerald-500 outline-none bg-white">
+                            <option value="">Semua Status</option>
+                            <option value="lengkap">Selesai (Datang & Pulang)</option>
+                            <option value="belum_pulang">Belum Absen Pulang</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="resetFilters()" class="w-full bg-white hover:bg-slate-100 border border-slate-300 text-slate-600 text-xs py-1.5 px-3 rounded-lg font-medium transition">
+                            Reset Filter
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="overflow-x-auto flex-grow border border-slate-200 rounded-xl">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 text-slate-700 uppercase text-[11px] tracking-wider font-semibold">
+                            <tr>
+                                <th class="py-3 px-4">No</th>
+                                <th class="py-3 px-4">Hari & Tanggal</th>
+                                <th class="py-3 px-4 text-center">Jam Datang</th>
+                                <th class="py-3 px-4 text-center">Jam Pulang</th>
+                                <th class="py-3 px-4 text-center">Durasi Kerja</th>
+                                <th class="py-3 px-4 text-center">Status</th>
+                                <th class="py-3 px-4 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-table-body" class="divide-y divide-slate-200 text-slate-700">
+                            <!-- Rows loaded via JavaScript -->
+                        </tbody>
+                    </table>
+                    
+                    <!-- Empty State -->
+                    <div id="empty-state" class="hidden py-12 text-center text-slate-400">
+                        <i class="fa-solid fa-calendar-xmark text-4xl mb-2 text-slate-300"></i>
+                        <p class="text-sm">Belum ada riwayat absensi tercatat.</p>
+                    </div>
+                </div>
+
+                <!-- Table Footer / Summary -->
+                <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500 gap-2">
+                    <div>Menampilkan <span id="showing-count" class="font-semibold text-slate-700">0</span> riwayat kehadiran</div>
+                    <div class="text-slate-400">Data tersimpan otomatis di perangkat Anda.</div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Konfirmasi Hapus -->
+    <div id="modal-confirm" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl transform scale-95 transition-transform duration-200">
+            <div class="text-center">
+                <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+                </div>
+                <h3 id="modal-title" class="text-lg font-bold text-slate-800">Konfirmasi</h3>
+                <p id="modal-message" class="text-xs text-slate-500 mt-2">Apakah Anda yakin ingin menghapus data ini?</p>
+            </div>
+            <div class="mt-6 flex space-x-3">
+                <button onclick="closeModal()" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-xs font-semibold transition">
+                    Batal
+                </button>
+                <button id="modal-confirm-btn" class="w-1/2 bg-rose-600 hover:bg-rose-700 text-white py-2 rounded-xl text-xs font-semibold transition">
+                    Hapus
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application JavaScript Logic -->
+    <script>
+        // Profile Guru State
+        let guruProfile = JSON.parse(localStorage.getItem('absensi_guru_profile')) || {
+            name: 'Drs. Supriyadi, M.Pd',
+            info: 'NIP. 19750812 200501 1 002 / Guru Wali Kelas'
+        };
+
+        // Attendance Records State
+        let attendanceRecords = JSON.parse(localStorage.getItem('absensi_guru_records')) || [];
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('absensi_guru_profile', JSON.stringify(guruProfile));
+            localStorage.setItem('absensi_guru_records', JSON.stringify(attendanceRecords));
+            updateStats();
+        }
+
+        // Render Profile Guru
+        function renderProfile() {
+            document.getElementById('display-guru-name').textContent = guruProfile.name || 'Nama Guru Belum Diisi';
+            document.getElementById('display-guru-info').textContent = guruProfile.info || 'NIP / Jabatan';
+            
+            // Set Avatar Initial
+            const initial = guruProfile.name ? guruProfile.name.charAt(0).toUpperCase() : 'G';
+            document.getElementById('profile-avatar').textContent = initial;
+
+            document.getElementById('guru-name').value = guruProfile.name || '';
+            document.getElementById('guru-info').value = guruProfile.info || '';
+        }
+
+        // Toggle Edit Profile View
+        function toggleEditProfile() {
+            const display = document.getElementById('profile-display');
+            const form = document.getElementById('profile-form');
+            const btnText = document.getElementById('edit-btn-text');
+
+            if (form.classList.contains('hidden')) {
+                form.classList.remove('hidden');
+                display.classList.add('hidden');
+                btnText.textContent = 'Batal';
+            } else {
+                form.classList.add('hidden');
+                display.classList.remove('hidden');
+                btnText.textContent = 'Ubah';
+            }
+        }
+
+        // Handle Save Profile
+        function handleSaveProfile(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('guru-name').value.trim();
+            const infoInput = document.getElementById('guru-info').value.trim();
+
+            if (!nameInput) {
+                showToast('Nama Guru tidak boleh kosong!', 'error');
+                return;
+            }
+
+            guruProfile.name = nameInput;
+            guruProfile.info = infoInput;
+
+            saveData();
+            renderProfile();
+            toggleEditProfile();
+            showToast('Identitas Guru berhasil diperbarui!');
+        }
+
+        // Clock Functionality
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('id-ID', { hour12: false });
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const dateStr = now.toLocaleDateString('id-ID', options);
+
+            document.getElementById('live-clock').textContent = timeStr;
+            document.getElementById('live-date').textContent = dateStr;
+            document.getElementById('current-today-date').textContent = dateStr;
+        }
+        setInterval(updateClock, 1000);
+
+        // Helper: Format Date to YYYY-MM-DD
+        function formatDateKey(dateObj) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Toast Notification System
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColor = type === 'success' ? 'bg-emerald-600' : (type === 'error' ? 'bg-rose-600' : 'bg-indigo-600');
+            const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info');
+
+            toast.className = `${bgColor} text-white px-4 py-3 rounded-xl shadow-lg flex items-center space-x-3 pointer-events-auto transform transition-all duration-300 opacity-0 translate-y-2 text-xs font-medium`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i><span>${message}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Update Absen Hari Ini Display
+        function updateTodayStatus() {
+            const todayStr = formatDateKey(new Date());
+            const record = attendanceRecords.find(r => r.date === todayStr);
+
+            const textIn = document.getElementById('today-time-in');
+            const textOut = document.getElementById('today-time-out');
+
+            if (record) {
+                textIn.textContent = record.timeIn || '--:--';
+                textOut.textContent = record.timeOut || '--:--';
+            } else {
+                textIn.textContent = '--:--';
+                textOut.textContent = '--:--';
+            }
+        }
+
+        // Mark Attendance (Datang / Pulang)
+        function markAttendance(type) {
+            if (!guruProfile.name || guruProfile.name === 'Nama Guru Belum Diisi') {
+                showToast('Silakan isi Nama Guru terlebih dahulu!', 'error');
+                toggleEditProfile();
+                return;
+            }
+
+            const now = new Date();
+            const todayStr = formatDateKey(now);
+            const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            const dayName = now.toLocaleDateString('id-ID', { weekday: 'long' });
+
+            let recordIndex = attendanceRecords.findIndex(r => r.date === todayStr);
+
+            if (type === 'Datang') {
+                if (recordIndex !== -1 && attendanceRecords[recordIndex].timeIn) {
+                    showToast(`Anda sudah melakukan Absen Datang hari ini jam ${attendanceRecords[recordIndex].timeIn}`, 'info');
+                    return;
+                }
+
+                if (recordIndex !== -1) {
+                    attendanceRecords[recordIndex].timeIn = timeStr;
+                } else {
+                    attendanceRecords.push({
+                        id: Date.now().toString(),
+                        date: todayStr,
+                        dayName: dayName,
+                        guruName: guruProfile.name,
+                        guruInfo: guruProfile.info,
+                        timeIn: timeStr,
+                        timeOut: null
+                    });
+                }
+                showToast(`Absen Datang berhasil dicatat [${timeStr}]`, 'success');
+            } 
+            else if (type === 'Pulang') {
+                if (recordIndex === -1 || !attendanceRecords[recordIndex].timeIn) {
+                    showToast(`Anda belum melakukan Absen Datang hari ini!`, 'error');
+                    return;
+                }
+
+                if (attendanceRecords[recordIndex].timeOut) {
+                    showToast(`Anda sudah melakukan Absen Pulang hari ini jam ${attendanceRecords[recordIndex].timeOut}`, 'info');
+                    return;
+                }
+
+                attendanceRecords[recordIndex].timeOut = timeStr;
+                showToast(`Absen Pulang berhasil dicatat [${timeStr}]`, 'success');
+            }
+
+            saveData();
+            updateTodayStatus();
+            renderTable();
+        }
+
+        // Calculate Work Duration
+        function calculateDuration(timeIn, timeOut) {
+            if (!timeIn || !timeOut) return '-';
+            const [h1, m1, s1] = timeIn.split(':').map(Number);
+            const [h2, m2, s2] = timeOut.split(':').map(Number);
+
+            let diffMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+            if (diffMinutes < 0) diffMinutes += 24 * 60; // Overnight handle
+
+            const hours = Math.floor(diffMinutes / 60);
+            const mins = diffMinutes % 60;
+
+            return `${hours} jam ${mins} mnt`;
+        }
+
+        // Render Table Data
+        function renderTable() {
+            const tbody = document.getElementById('attendance-table-body');
+            const emptyState = document.getElementById('empty-state');
+            const monthVal = document.getElementById('filter-month').value; // YYYY-MM
+            const statusVal = document.getElementById('filter-status').value;
+
+            tbody.innerHTML = '';
+
+            let filtered = attendanceRecords.filter(r => {
+                const matchMonth = monthVal ? r.date.startsWith(monthVal) : true;
+                let matchStatus = true;
+                if (statusVal === 'lengkap') {
+                    matchStatus = r.timeIn && r.timeOut;
+                } else if (statusVal === 'belum_pulang') {
+                    matchStatus = r.timeIn && !r.timeOut;
+                }
+                return matchMonth && matchStatus;
+            });
+
+            // Sort by Date DESC
+            filtered.sort((a, b) => b.date.localeCompare(a.date));
+
+            document.getElementById('showing-count').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filtered.forEach((rec, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition duration-150';
+
+                const dateParts = rec.date.split('-');
+                const formattedDate = `${rec.dayName || ''}, ${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                const duration = calculateDuration(rec.timeIn, rec.timeOut);
+
+                const statusBadge = rec.timeIn && rec.timeOut 
+                    ? `<span class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-[10px] font-semibold">Selesai</span>`
+                    : `<span class="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-[10px] font-semibold">Belum Pulang</span>`;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-slate-400 text-xs">${index + 1}</td>
+                    <td class="py-3 px-4 whitespace-nowrap text-xs font-semibold text-slate-700">${formattedDate}</td>
+                    <td class="py-3 px-4 text-center">
+                        ${rec.timeIn 
+                            ? `<span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg text-xs font-medium border border-emerald-200/60"><i class="fa-regular fa-clock text-[10px]"></i> ${rec.timeIn}</span>` 
+                            : '<span class="text-slate-300">-</span>'}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        ${rec.timeOut 
+                            ? `<span class="inline-flex items-center gap-1 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg text-xs font-medium border border-rose-200/60"><i class="fa-regular fa-clock text-[10px]"></i> ${rec.timeOut}</span>` 
+                            : '<span class="text-slate-300">-</span>'}
+                    </td>
+                    <td class="py-3 px-4 text-center text-xs font-medium text-slate-600">${duration}</td>
+                    <td class="py-3 px-4 text-center">${statusBadge}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="confirmDeleteRecord('${rec.id}')" title="Hapus Entri Ini" class="text-slate-400 hover:text-rose-600 p-1.5 transition">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Reset Filter Controls
+        function resetFilters() {
+            document.getElementById('filter-month').value = '';
+            document.getElementById('filter-status').value = '';
+            renderTable();
+        }
+
+        // Update Statistics Counters
+        function updateStats() {
+            document.getElementById('stat-total-hadir').textContent = attendanceRecords.length;
+            const completedCount = attendanceRecords.filter(r => r.timeIn && r.timeOut).length;
+            document.getElementById('stat-lengkap-hadir').textContent = completedCount;
+        }
+
+        // Modal Handlers
+        let onModalConfirmAction = null;
+
+        function openModal(title, message, onConfirm) {
+            const modal = document.getElementById('modal-confirm');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+
+            onModalConfirmAction = onConfirm;
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.children[0].classList.remove('scale-95');
+                modal.children[0].classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('modal-confirm');
+            modal.classList.add('opacity-0');
+            modal.children[0].classList.remove('scale-100');
+            modal.children[0].classList.add('scale-95');
+
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+            if (onModalConfirmAction) onModalConfirmAction();
+            closeModal();
+        });
+
+        // Delete Single Record
+        function confirmDeleteRecord(id) {
+            openModal(
+                'Hapus Catatan Presensi',
+                'Apakah Anda yakin ingin menghapus catatan presensi tanggal ini?',
+                () => {
+                    attendanceRecords = attendanceRecords.filter(r => r.id !== id);
+                    saveData();
+                    renderTable();
+                    updateTodayStatus();
+                    showToast('Catatan presensi berhasil dihapus');
+                }
+            );
+        }
+
+        // Clear All Data
+        function confirmClearData() {
+            openModal(
+                'Reset Seluruh Riwayat',
+                'Tindakan ini akan menghapus SEMUA riwayat presensi yang pernah dicatat. Lanjutkan?',
+                () => {
+                    attendanceRecords = [];
+                    saveData();
+                    renderTable();
+                    updateTodayStatus();
+                    showToast('Seluruh riwayat presensi telah dibersihkan', 'info');
+                }
+            );
+        }
+
+        // Export to Excel Functionality using SheetJS
+        function exportToExcel() {
+            if (attendanceRecords.length === 0) {
+                showToast('Belum ada data presensi untuk diekspor!', 'error');
+                return;
+            }
+
+            // Header info & Rekap Data
+            const exportData = attendanceRecords.map((rec, idx) => {
+                const dateParts = rec.date.split('-');
+                const formattedDate = `${rec.dayName || ''}, ${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                const duration = calculateDuration(rec.timeIn, rec.timeOut);
+
+                return {
+                    'No': idx + 1,
+                    'Nama Guru': rec.guruName || guruProfile.name,
+                    'NIP / Info': rec.guruInfo || guruProfile.info,
+                    'Tanggal': formattedDate,
+                    'Jam Datang': rec.timeIn || 'Belum Absen',
+                    'Jam Pulang': rec.timeOut || 'Belum Absen',
+                    'Durasi Kerja': duration,
+                    'Status': rec.timeIn && rec.timeOut ? 'Lengkap' : 'Belum Pulang'
+                };
+            });
+
+            // Create Worksheet
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+            // Set column widths
+            worksheet['!cols'] = [
+                { wch: 5 },  // No
+                { wch: 28 }, // Nama Guru
+                { wch: 32 }, // NIP / Info
+                { wch: 22 }, // Tanggal
+                { wch: 14 }, // Jam Datang
+                { wch: 14 }, // Jam Pulang
+                { wch: 16 }, // Durasi Kerja
+                { wch: 15 }  // Status
+            ];
+
+            // Create Workbook
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Presensi Guru");
+
+            // Generate filename with Guru Name & Date
+            const cleanGuruName = (guruProfile.name || 'Guru').replace(/[^a-zA-Z0-9]/g, '_');
+            const todayStr = formatDateKey(new Date());
+            const fileName = `Rekap_Presensi_${cleanGuruName}_${todayStr}.xlsx`;
+
+            // Download Excel
+            XLSX.writeFile(workbook, fileName);
+            showToast('File Excel Rekap Presensi berhasil diunduh!');
+        }
+
+        // Initialize App
+        window.onload = function() {
+            updateClock();
+            renderProfile();
+            updateTodayStatus();
+            renderTable();
+            updateStats();
+        };
+    </script>
+</body>
+</html>
